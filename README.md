@@ -17,17 +17,23 @@
 * If I had sorted for virus high cells, around 70% of cells were virus high.
 
 ### <ins>Analysis<ins>
-#### 1. Determine barcode recovery efficiency with Flex chemistry
+#### Determine barcode recovery efficiency with Flex chemistry
 The workflow of Flex is easier than with universal GEM-X because you can use fixed cells. In addition, it is *significantly cheaper* making it an attractive option for large-scale perturbation screens. However, I need to verify that the barcodes are sensitively and specifically detected in this assay.
 ##### Files:
 
-#### 2. Examine variability between biological replicates
+#### Examine variability between biological replicates
 While I can't deconvolute exact well identitiy (see caveats), I can at least examine the correlation between biological replicates across plates.
 ##### Files:
 
-#### 3. Linear modeling to recover additive vs emergent interaction effects.
+#### Differential Expression Analysis
+Can test different methods including wilcoxon and memento.
 
-#### 4. Test usefulness of trajectory analysis in mapping combinatorial stimulations.
+#### Linear modeling to recover additive vs emergent interaction effects.
+
+#### Factor analysis
+Perhaps could be used to identify robust downstream signaling networks that correspond to specific signaling intermediates? Can use spectra, topic modeling, etc.
+
+#### Test usefulness of trajectory analysis in mapping combinatorial stimulations.
 For a subset of interactions, it would be interesting to place them along a trajectory. There are many scenarios one can imagine (e.g. do all combinations lead to distinct branches? Are there terminal branches that are only reached with combinatorial additions?). It would also be useful if trajectory analysis with palantir could be used to identify gene modules that change with combinatorial additions.
 
 #### 5. Test non-linear ICA model (Ola)
