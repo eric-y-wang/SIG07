@@ -25,4 +25,9 @@ The workflow of Flex is easier than with universal GEM-X because you can use fix
 While I can't deconvolute exact well identitiy (see caveats), I can at least examine the correlation between biological replicates across plates.
 ##### Files:
 
-#### 3. Test non-linear ICA model (Ola)
+#### 3. Linear modeling to recover additive vs emergent interaction effects.
+
+#### 4. Test usefulness of trajectory analysis in mapping combinatorial stimulations.
+For a subset of interactions, it would be interesting to place them along a trajectory. There are many scenarios one can imagine (e.g. do all combinations lead to distinct branches? Are there terminal branches that are only reached with combinatorial additions?). It would also be useful if trajectory analysis with palantir could be used to identify gene modules that change with combinatorial additions.
+
+#### 5. Test non-linear ICA model (Ola)
