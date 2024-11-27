@@ -1,0 +1,105 @@
+---
+title: "SIG07 Glimmer Interaction Modeling"
+author: "Eric Y. Wang"
+date: "`r Sys.Date()`"
+output:
+  github_document:
+    toc: true
+    html_preview: false
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+```{r setup}
+library(tidyverse)
+library(MASS)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import Data
+```{r}
+counts <- read.csv("../analysis_outs/IL4_IL27_test_counts.csv", row.names = 'cell_barcode')
+obs <- read_csv("../analysis_outs/IL4_IL27_test_obs.csv")
+```
+
+## Collect Variables
+
+```{r}
+groupPull <- c("IL4_linker","IL27_linker","IL4_IL27","linker_linker")
+obsSub <- obs %>% filter(ligand_call_oBC_CR %in% groupPull)
+```
+
+
+```{r}
+# add pseudocount to count data
+pseudocount <- 0
+counts_pseudo <- t(counts + pseudocount)
+counts_pseudo <- counts_pseudo[,obsSub$cell_barcode]
+```
+
+```{r}
+# get gene counts
+gene.counts <- counts_pseudo["Metrnl", ]
+
+# define ligand
+ligand1 <- obsSub$ligand_call_oBC_CR %in% c("IL4_linker","IL4_IL27")
+ligand2 <- obsSub$ligand_call_oBC_CR %in% c("IL27_linker","IL4_IL27")
+ligandDouble <- obsSub$ligand_call_oBC_CR == "IL4_IL27"
+group <- obsSub$group_call_CR %>% as.factor()
+percent.mito <- obsSub$pct_counts_mt %>% as.numeric()
+s.score <- obsSub$S_score %>% as.numeric()
+g2m.score <- obsSub$G2M_score %>% as.numeric()
+scaling.factor <- obsSub$total_counts %>% as.numeric()
+
+    # fit negative binomial GLM
+model.df <- cbind(
+        ligand1,
+        ligand2,
+        ligandDouble,
+        group,
+        percent.mito,
+        s.score,
+        g2m.score,
+        scaling.factor
+    ) %>% as.data.frame()
+```
+
+```{r}
+model.formula <- as.formula(paste0(
+        'gene.counts ~ ',
+        'ligand1 +',
+        'ligand2 +',
+        "ligandDouble +",
+        'group + ',
+        'percent.mito + ',
+        's.score + ',
+        'g2m.score + ',
+        'offset(log(scaling.factor))'
+    ))
+
+model <- glm.nb(
+        formula = model.formula,
+        data = model.df
+    )
+```
+
+```{r}
+summary(model)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
