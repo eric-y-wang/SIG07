@@ -1,0 +1,203 @@
+---
+title: "SIG07 Interaction Viz"
+author: "Eric Y. Wang"
+date: "`r Sys.Date()`"
+output:
+  github_document:
+    toc: true
+    html_preview: false
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+```{r setup}
+library(tidyverse)
+library(ggrepel)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+source("functions/plotting_fxns.R")
+theme_set(theme_Publication())
+```
+
+
+## Import Data
+```{r}
+interactions <- read_csv("analysis_outs/glmGamPoi_interaction_deg.csv")
+interSig <- interactions %>% filter(adj_pval < 0.1)
+coeff <- read_csv("analysis_outs/glmGamPoi_coefficients.csv")
+deg <- read_csv("analysis_outs/deg_wilcoxon.csv")
+```
+
+```{r}
+interSig$interaction %>% unique()
+```
+
+## XY interaction plots
+
+### Define helper functions
+
+```{r}
+make_xy_plot <- function(ligand_pair, interactions, coeff,
+                         p_val_cutoff=0.1, lfc_cutoff=0.25){
+  ligands = str_split_1(ligand_pair, pattern = "_")
+  
+  coeff <- coeff %>%
+    select(ligand1, ligand2, interaction, genes) %>%
+    filter(interaction == ligand_pair)
+  
+  interactions <- interactions %>%
+    filter(adj_pval < p_val_cutoff) %>%
+    filter(interaction == ligand_pair) %>%
+    filter(abs(lfc) > lfc_cutoff) %>%
+    left_join(coeff, by=c("name" = "genes"))
+  
+  # Define vlag color palette (red to white to blue)
+  vlag_palette <- c("#B2182B", "#D6604D", "#F4A582", "#FDDBC7", "#FFFFFF", 
+                    "#D1E5F0", "#92C5DE", "#4393C3", "#2166AC")%>% rev()
+  
+  # set limits for lfc scale (round up to one decimal place) 
+  lfc_max <- ceiling(max(abs(interactions$lfc))*10)/10
+    
+  ggplot(interactions, aes(x=ligand1, y=ligand2, fill=lfc, size = -log10(adj_pval))) +
+    geom_point(shape=21, alpha=0.7) +
+    scale_fill_gradientn(
+      colors = vlag_palette,
+      limits = c(-lfc_max, lfc_max)
+    ) +
+    xlab(paste(ligands[1],"coeff")) +
+    ylab(paste(ligands[2],"coeff")) +
+    geom_hline(yintercept=0, linetype="dashed") +
+    geom_vline(xintercept=0, linetype="dashed") +
+    theme(aspect.ratio=1)
+}
+```
+
+```{r}
+library(patchwork)
+
+# Uses make_xy_plot function to generate a grid of plots with all pairwise interactions
+generate_pairwise_plot_grid <- function(unique_ligands, interactions, coeff, interSig, p_val_cutoff = 0.1, lfc_cutoff = 0.25) {
+  
+  # Create an empty list to store the plots
+  plot_list <- list()
+  
+  # Iterate through ligand pairs and generate plots
+  for (row_ligand in unique_ligands) {
+    for (col_ligand in unique_ligands) {
+      # For diagonal plots, make them empty
+      if (row_ligand == col_ligand) {
+        plot_list[[paste(row_ligand, col_ligand, sep = "_")]] <- ggplot() + 
+          theme_void()
+        next
+      }
+      
+      # Determine the ligand pair
+      ligand_pair <- paste(row_ligand, col_ligand, sep = "_")
+      reverse_pair <- paste(col_ligand, row_ligand, sep = "_")
+      
+      if (ligand_pair %in% interSig$interaction) {
+        # Plot for the top-right side
+        plot <- make_xy_plot(
+          ligand_pair = ligand_pair,
+          interactions = interactions,
+          coeff = coeff,
+          p_val_cutoff = p_val_cutoff,
+          lfc_cutoff = lfc_cutoff
+        )
+        # Remove text and labels
+        plot <- plot +
+          theme(legend.position = "none")
+        plot_list[[paste(row_ligand, col_ligand, sep = "_")]] <- plot
+      } else if (reverse_pair %in% interSig$interaction) {
+        # Transpose the plot for the bottom-left side
+        plot <- make_xy_plot(
+          ligand_pair = reverse_pair,
+          interactions = interactions,
+          coeff = coeff,
+          p_val_cutoff = p_val_cutoff,
+          lfc_cutoff = lfc_cutoff
+        )
+        # Remove text and labels, and transpose axes
+        plot <- plot +
+          coord_flip() + # Transpose the plot
+          theme(legend.position = "none")
+        plot_list[[paste(row_ligand, col_ligand, sep = "_")]] <- plot
+      } else {
+        # Add an empty plot if no interaction exists
+        plot_list[[paste(row_ligand, col_ligand, sep = "_")]] <- ggplot() + 
+          theme_void()
+      }
+    }
+  }
+  
+  # Arrange the plots in a symmetric grid
+  plot_grid <- wrap_plots(plot_list,
+                          nrow = length(unique_ligands),
+                          ncol = length(unique_ligands)) +
+    plot_layout(heights = rep(3, length(unique_ligands)),
+                widths = rep(3, length(unique_ligands)))
+  
+  # Return the plot grid
+  return(plot_grid)
+}
+```
+
+### Making plots
+
+```{r}
+make_xy_plot("IL12_IL21", interactions = interactions, coeff = coeff, p_val_cutoff=0.01) +
+  geom_label_repel(aes(label = name))
+```
+
+
+
+```{r, fig.height=30, fig.width=30}
+# Extract unique ligands
+unique_ligands <- unique(unlist(strsplit(interSig$interaction, "_")))
+
+# Call the function
+pairwise_plot_grid <- generate_pairwise_plot_grid(
+  unique_ligands = unique_ligands,
+  interactions = interactions,
+  coeff = coeff,
+  interSig = interSig,
+  p_val_cutoff = 0.1,
+  lfc_cutoff = 0.25
+)
+
+pairwise_plot_grid
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
