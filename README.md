@@ -17,31 +17,31 @@
 * If I had sorted for virus high cells, around 70% of cells were virus high.
 
 ### <ins>Analysis<ins>
-#### Determine barcode recovery efficiency with Flex chemistry
+#### <ins>Determine barcode recovery efficiency with Flex chemistry<ins>
 The workflow of Flex is easier than with universal GEM-X because you can use fixed cells. In addition, it is *significantly cheaper* making it an attractive option for large-scale perturbation screens. However, I need to verify that the barcodes are sensitively and specifically detected in this assay.
 ##### Files:
 
-#### Examine variability between biological replicates
+#### <ins>Examine variability between biological replicates<ins>
 While I can't deconvolute exact well identitiy (see caveats), I can at least examine the correlation between biological replicates across plates.
 ##### Files: 
 
-#### Differential Transcriptome Analysis
+#### <ins>Differential Transcriptome Analysis<ins>
 Examine transcriptional similarity between ligands and look at differentially expressed genes.
 ##### Files:
 * correlation_analysis.ipynb: clustering and inter-ligand comparisons using heatmaps and MDE
 * deg_analysis_SIG07.ipynb: running and testing different DEG approaches
 
-#### Linear modeling to recover additive vs emergent interaction effects.
+#### <ins>Linear modeling to recover additive vs emergent interaction effects.<ins>
 Using gene-level and overall expression values, we can quantify the interaction effects across different ligand pairings.
 ##### Files:
 * interaction_glm_notebook.ipynb: testing different glm approaches and coding
 * interaction_glmGamPoi.r: R script to run GamPoi GLM in parallel format on cluster
 * interaction_glmGamPoi_viz.Rmd: R markdown visualization of glmGamPoi results
 
-#### Factor analysis
+#### <ins>Factor analysis<ins>
 Perhaps could be used to identify robust downstream signaling networks that correspond to specific signaling intermediates? Can use spectra, topic modeling, etc.
 
-#### Test usefulness of trajectory analysis in mapping combinatorial stimulations.
+#### <ins>Test usefulness of trajectory analysis in mapping combinatorial stimulations.<ins>
 For a subset of interactions, it would be interesting to place them along a trajectory. There are many scenarios one can imagine (e.g. do all combinations lead to distinct branches? Are there terminal branches that are only reached with combinatorial additions?). It would also be useful if trajectory analysis with palantir could be used to identify gene modules that change with combinatorial additions.
 
-#### 5. Test non-linear ICA model (Ola)
+#### 5. <ins>Test non-linear ICA model (Ola)<ins>
