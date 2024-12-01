@@ -23,12 +23,20 @@ The workflow of Flex is easier than with universal GEM-X because you can use fix
 
 #### Examine variability between biological replicates
 While I can't deconvolute exact well identitiy (see caveats), I can at least examine the correlation between biological replicates across plates.
-##### Files:
+##### Files: 
 
-#### Differential Expression Analysis
-Can test different methods including wilcoxon and memento.
+#### Differential Transcriptome Analysis
+Examine transcriptional similarity between ligands and look at differentially expressed genes.
+##### Files:
+* correlation_analysis.ipynb: clustering and inter-ligand comparisons using heatmaps and MDE
+* deg_analysis_SIG07.ipynb: running and testing different DEG approaches
 
 #### Linear modeling to recover additive vs emergent interaction effects.
+Using gene-level and overall expression values, we can quantify the interaction effects across different ligand pairings.
+##### Files:
+* interaction_glm_notebook.ipynb: testing different glm approaches and coding
+* interaction_glmGamPoi.r: R script to run GamPoi GLM in parallel format on cluster
+* interaction_glmGamPoi_viz.Rmd: R markdown visualization of glmGamPoi results
 
 #### Factor analysis
 Perhaps could be used to identify robust downstream signaling networks that correspond to specific signaling intermediates? Can use spectra, topic modeling, etc.
