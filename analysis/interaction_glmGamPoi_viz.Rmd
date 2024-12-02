@@ -6,9 +6,11 @@ output:
   github_document:
     toc: true
     html_preview: false
+    mathjax: default
   html_notebook:
     toc: true
     toc_float: true
+    mathjax: default
 ---
 
 ```{r setup}
@@ -22,67 +24,120 @@ source("functions/plotting_fxns.R")
 theme_set(theme_Publication())
 ```
 
+## Goals
+
+Visualize and examine the interaction effects as determined by gene-level Gamma
+Poisson GLM modeling. As a reminder, the GLM is expressed as follows:
+
+$$
+\log(\mu_i) = \beta_0 + \beta_1 (\text{ligand1}_i) + \beta_2 (\text{ligand2}_i) + \beta_3 (\text{ligand1}_i \cdot \text{ligand2}_i) + \beta_4 (\text{group}_i) + \beta_5 (\text{percent.mito}_i) + \beta_6 (\text{s.score}_i) + \beta_7 (\text{g2m.score}_i) + \log(\text{total_counts}_i)
+$$
+
+Where:
+
+-   $\mu_i$: The expected counts for observation $i$.
+-   $\beta_0$: The intercept term (baseline level of expression).
+-   $\beta_1$ to $\beta_7$: Coefficients representing the effect sizes of the
+    predictors.
+-   $\text{ligand1}_i$: The value of `ligand1` for observation $i$.
+-   $\text{ligand2}_i$: The value of `ligand2` for observation $i$.
+-   $\text{ligand1}_i \cdot \text{ligand2}_i$: The interaction effect between
+    `ligand1` and `ligand2`.
+-   $\text{group}_i$: The biological group variable (different mice).
+-   $\text{percent.mito}_i$: The percentage of mitochondrial RNA for observation
+    $i$.
+-   $\text{s.score}_i$: The S-phase cell cycle score for observation $i$.
+-   $\text{g2m.score}_i$: The G2/M-phase cell cycle score for observation $i$.
+-   $\text{total_counts}_i$: The scaling factor for sequencing depth.
 
 ## Import Data
+
+Here, the LFCs are calculated from the GLM by performing QLRTs for the
+interaction term and each individual ligand. The DEG file is just for reference
+and it is from a simple wilcoxon test performed in scanpy.
+
 ```{r}
-interactions <- read_csv("analysis_outs/glmGamPoi_interaction_deg.csv")
-interSig <- interactions %>% filter(adj_pval < 0.1)
-coeff <- read_csv("analysis_outs/glmGamPoi_coefficients.csv")
-deg <- read_csv("analysis_outs/deg_wilcoxon.csv")
+# import LFC from glm model
+interactionsLfc <- read_csv("analysis_outs/glmGamPoi_interaction_deg.csv")
+interSig <- interactionsLfc %>% filter(adj_pval < 0.1)
+singlesLfc <- read_csv("analysis_outs/glmGamPoi_singles_deg.csv")
+# import DEGs from scanpy
+deg <- read_csv("analysis_outs/deg_wilcoxon.csv")[-1]
 ```
 
 ```{r}
 interSig$interaction %>% unique()
 ```
 
-## XY interaction plots
+## Helper functions
 
-### Define helper functions
-
-```{r}
-make_xy_plot <- function(ligand_pair, interactions, coeff,
+```{r make_xy_plot}
+make_xy_plot <- function(ligand_pair, interactions, singles,
                          p_val_cutoff=0.1, lfc_cutoff=0.25){
-  ligands = str_split_1(ligand_pair, pattern = "_")
+  # Function to create an XY plot comparing log-fold changes (LFC) for two ligands in a pair.
+  # Inputs:
+  # - ligand_pair: A string specifying the ligand pair, e.g., "IL4_IFNA".
+  # - interactions: Dataframe containing interaction data with columns `name`, `lfc`, `adj_pval`, `interaction`.
+  # - singles: Dataframe containing single ligand data with columns `name`, `lfc`, `adj_pval`, `single_ligand`.
+  # - p_val_cutoff: P-value cutoff for filtering significant interactions (default = 0.1).
+  # - lfc_cutoff: Log-fold change cutoff for filtering significant interactions (default = 0.25).
+
+  # Split the ligand pair (e.g., "IL4_IFNA") into individual ligands
+  ligands <- str_split_1(ligand_pair, pattern = "_")
   
-  coeff <- coeff %>%
-    select(ligand1, ligand2, interaction, genes) %>%
-    filter(interaction == ligand_pair)
-  
+  # Filter and process the singles data
+  singles <- singles %>%
+    filter(single_ligand %in% ligands) %>%
+    filter(interaction == ligand_pair) %>%
+    select(name, adj_pval, lfc, single_ligand) %>%
+    pivot_wider(
+      names_from = single_ligand,         
+      values_from = c(adj_pval, lfc),       
+      names_sep = "_"                       
+    )
+
+  # Filter and process the interaction data
   interactions <- interactions %>%
     filter(adj_pval < p_val_cutoff) %>%
     filter(interaction == ligand_pair) %>%
     filter(abs(lfc) > lfc_cutoff) %>%
-    left_join(coeff, by=c("name" = "genes"))
-  
-  # Define vlag color palette (red to white to blue)
-  vlag_palette <- c("#B2182B", "#D6604D", "#F4A582", "#FDDBC7", "#FFFFFF", 
-                    "#D1E5F0", "#92C5DE", "#4393C3", "#2166AC")%>% rev()
-  
-  # set limits for lfc scale (round up to one decimal place) 
-  lfc_max <- ceiling(max(abs(interactions$lfc))*10)/10
-    
-  ggplot(interactions, aes(x=ligand1, y=ligand2, fill=lfc, size = -log10(adj_pval))) +
+    left_join(singles, by = "name")
+
+  # Define vlag palette
+  vlag_palette <- c("#B2182B", "#D6604D", "#F4A582", "#FDDBC7", "#FFFFFF",
+                    "#D1E5F0", "#92C5DE", "#4393C3", "#2166AC") %>% rev()
+
+  # Set the limits for the log-fold change scale, rounded up to one decimal place
+  lfc_max <- ceiling(max(abs(interactions$lfc)) * 10) / 10
+
+  # plot
+  ggplot(interactions, aes(x=.data[[paste0("lfc_",ligands[1])]],
+                           y=.data[[paste0("lfc_",ligands[2])]],
+                           fill=lfc,
+                           size = -log10(adj_pval))) +
     geom_point(shape=21, alpha=0.7) +
     scale_fill_gradientn(
       colors = vlag_palette,
       limits = c(-lfc_max, lfc_max)
     ) +
-    xlab(paste(ligands[1],"coeff")) +
-    ylab(paste(ligands[2],"coeff")) +
     geom_hline(yintercept=0, linetype="dashed") +
     geom_vline(xintercept=0, linetype="dashed") +
     theme(aspect.ratio=1)
 }
 ```
 
-```{r}
+```{r generate_pairwise_plot_grid}
 library(patchwork)
 
 # Uses make_xy_plot function to generate a grid of plots with all pairwise interactions
-generate_pairwise_plot_grid <- function(unique_ligands, interactions, coeff, interSig, p_val_cutoff = 0.1, lfc_cutoff = 0.25) {
+generate_pairwise_plot_grid <- function(unique_ligands, interactions, singles, p_val_cutoff = 0.1, lfc_cutoff = 0.25) {
   
   # Create an empty list to store the plots
   plot_list <- list()
+  
+  # create tibble with significant iteraction DEGs
+  interSig <- interactions %>%
+    filter(adj_pval < p_val_cutoff)
   
   # Iterate through ligand pairs and generate plots
   for (row_ligand in unique_ligands) {
@@ -103,7 +158,7 @@ generate_pairwise_plot_grid <- function(unique_ligands, interactions, coeff, int
         plot <- make_xy_plot(
           ligand_pair = ligand_pair,
           interactions = interactions,
-          coeff = coeff,
+          singles = singles,
           p_val_cutoff = p_val_cutoff,
           lfc_cutoff = lfc_cutoff
         )
@@ -116,7 +171,7 @@ generate_pairwise_plot_grid <- function(unique_ligands, interactions, coeff, int
         plot <- make_xy_plot(
           ligand_pair = reverse_pair,
           interactions = interactions,
-          coeff = coeff,
+          singles = singles,
           p_val_cutoff = p_val_cutoff,
           lfc_cutoff = lfc_cutoff
         )
@@ -145,59 +200,331 @@ generate_pairwise_plot_grid <- function(unique_ligands, interactions, coeff, int
 }
 ```
 
-### Making plots
-
-```{r}
-make_xy_plot("IL12_IL21", interactions = interactions, coeff = coeff, p_val_cutoff=0.01) +
-  geom_label_repel(aes(label = name))
+```{r plot_lfc_pair}
+plot_lfc_pair <- function(genes, ligand_pair, deg_data) {
+  # Function to plot log-fold changes (LFC) for interaction and single ligands given a vector of genes
+  
+  # Split the ligand pair (e.g., "IL4_IFNA") into individual ligands (e.g., "IL4" and "IFNA")
+  ligands <- str_split_1(ligand_pair, pattern = "_")
+  
+  # Filter and process the input differential expression (DEG) data
+  deg_data %>%
+    filter(
+      # Select only rows where the group matches the ligands and their interaction
+      group %in% c(
+        paste0(ligands[1], "_linker"),  # Single ligand 1 with "_linker"
+        paste0(ligands[2], "_linker"),  # Single ligand 2 with "_linker"
+        ligand_pair                     # Interaction of both ligands
+      )
+    ) %>%
+    # Convert the `group` column into a factor to ensure consistent ordering
+    mutate(group = factor(
+      group,
+      levels = c(
+        paste0(ligands[1], "_linker"),  # First ligand "_linker"
+        paste0(ligands[2], "_linker"),  # Second ligand "_linker"
+        ligand_pair                     # Combined ligand interaction
+      )
+    )) %>%
+    # Keep only rows where the `names` column matches the genes of interest
+    filter(names %in% genes) %>%
+    
+    # Create the plot
+    ggplot(aes(x = names, y = logfoldchanges, fill = group)) +
+      geom_bar(stat = "identity", position = position_dodge()) +
+      xlab("genes") +
+      ylab("LFC vs linker only") +
+      scale_fill_brewer(palette = "Dark2")
+}
 ```
 
+## Overview of interaction effects
 
+First, lets take a broad view of the interaction effects
+
+### Number of Interactions
+
+```{r, fig.height=5, fig.width=10}
+interactionsLfc %>%
+  filter(adj_pval < 0.1) %>%
+  filter(abs(lfc) > 0.25) %>%
+  count(interaction, name = "count") %>%  # Count occurrences for each interaction
+  arrange(desc(count)) %>%  # Arrange data by decreasing counts
+  mutate(interaction = factor(interaction, levels = interaction)) %>%
+  ggplot(aes(x = interaction, y = count)) +
+    geom_bar(stat = "identity") +
+    ylab("# interaction DEGs") +
+    ggtitle("Interaction DEG # (padj < 0.1, lfc > 0.25)") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r, fig.height=5, fig.width=5}
+# Calculate total DEGs for individual ligands
+totalDegs <- singleLfc %>%
+  filter(adj_pval < 0.1) %>%
+  filter(abs(lfc) > 0.25) %>%
+  select(name, interaction) %>%
+  unique() %>%
+  group_by(interaction) %>%
+  summarise(total_degs = n())
+
+# Count significant interactions
+interactionCounts <- interactionsLfc %>%
+  filter(adj_pval < 0.1) %>%
+  filter(abs(lfc) > 0.25) %>%
+  count(interaction, name = "count")
+
+# Combine the two datasets
+combinedData <- interactionCounts %>%
+  full_join(totalDegs, by = "interaction") %>%
+  mutate(interaction = factor(interaction, levels = interaction))  # Maintain original order
+
+# Create the XY plot
+ggplot(combinedData, aes(x = total_degs, y = count, label = interaction)) +
+  geom_point(size = 2, alpha = 0.7) +  # Plot points
+  geom_text_repel(size = 2) +
+  xlim(0,4100) +
+  labs(
+    x = "Total Unique DEGs (Single Ligands)", 
+    y = "Interaction DEGs", 
+    title = "Total DEGs vs Interaction DEGs"
+  )
+```
+
+Somewhat unsurprisingly the number of interaction DEGs scales with the total
+number of unique DEGs in the corresponding single ligand stimulations. Notably
+though there **is variance** in the number of interaction DEGs (e.g. the TNF
+interactions on the right hand side) which is somewhat reassuring that the
+interaction effects isn't just an artifact of noise in the data.
+
+### Distribution of interaction effects
+
+One interesting question is whether the same genes have interaction effects
+across different ligands or whether, for the same ligand, the same genes tend to
+promiscuously have interaction effects when paired with many different ligands.
+We'll examine these one at a time
+
+#### Interaction genes across ligands
+
+```{r}
+# get number of times gene is interacting across all ligands
+interactGeneSummary <- interactionsLfc %>%
+  filter(adj_pval < 0.01) %>%
+  filter(abs(lfc) > 0.25) %>%
+  group_by(name) %>%
+  summarise(num_interactions = n(),
+            median_lfc = median(abs(lfc)),
+            median_pval = median(adj_pval))
+```
+
+```{r, fig.height=5}
+ggplot(interactGeneSummary, aes(x = num_interactions)) +
+  geom_histogram(bins = 20) +
+  ggtitle("Distribution of Interaction Effects Across Ligands")
+```
+
+```{r, fig.height=10, fig.width=14}
+library(ggpointdensity)
+p1 <- ggplot(interactGeneSummary, aes(x = factor(num_interactions), y=abs(median_lfc))) +
+  geom_point() + 
+  scale_color_viridis_c() +
+  ylab("Median LFC (abs value)") +
+  xlab("number of interactions")
+p2 <- ggplot(interactGeneSummary, aes(x = factor(num_interactions), y=-log10(median_pval))) +
+  geom_point() + 
+  scale_color_viridis_c() +
+  ylab("Median -log10(padj)") +
+  xlab("number of interactions")
+p3 <- ggplot(interactGeneSummary, aes(x = factor(num_interactions), y=abs(median_lfc))) +
+  geom_boxplot() +
+  ylab("Median LFC (abs value)") +
+  xlab("number of interactions")
+p4 <- ggplot(interactGeneSummary, aes(x = factor(num_interactions), y=-log10(median_pval))) +
+  geom_boxplot() +
+  ylab("Median -log10(padj)") +
+  xlab("number of interactions")
+
+p1+p2+p3+p4+plot_layout(ncol=2)
+```
+
+-   Majority of genes with interaction effects are present in a relatively small
+    number of interactions (perhaps just that they are somewhat ligand-specific
+    and each ligand has 7 potential pairings)
+-   Genes with the highest median LFC and significance tend to be those with
+    lower numbers of interactions, although genes with high numbers of
+    interactions tend to have higher overall LFC and significance.
+-   A small subset of genes with promiscuous interaction effects are highly
+    significant (see below).
+
+```{r}
+# get promiscuous interactors with high significance
+interactGeneSummary %>%
+  filter(num_interactions > 10 & -log10(median_pval) > 20)
+```
+
+```{r}
+# get promiscuous interactors with high significance
+interactGeneSummary %>%
+  filter(median_lfc > 1) %>%
+  arrange(median_pval, ascending=T)
+```
+
+**Random interesting relatively unique interactions just from scanning**
+
+-   IL6 + TNF -\> emergent Rorc upregulation (consistent with studies suggesting
+    the role of Tnf in promoting Th17)
+    -   <https://www.pnas.org/doi/10.1073/pnas.2109972118>
+-   IL4 & IL2 + TNF -\> synergistic downregulation of Irf4 (role in Th1
+    induction?)
+-   IL4 + TNF -\> emergent Thrb upregulation
+-   IFNA & IL27 + TNF -\> Cxcl10 upregulation
+    -   IL27 also leads to synergistic Tbx21 induction but not IFNA
+
+```{r, fig.height=10, fig.width=10}
+p1 <- plot_lfc_pair(c("Rorc"),"IL6_TNF", deg)
+p2 <- plot_lfc_pair(c("Thrb","Snn","Irf4","Mdk"),"IL4_TNF", deg)
+p3 <- plot_lfc_pair(c("Irf4"),"IL2_TNF", deg)
+p6 <- plot_lfc_pair(c("Cxcl10", "Tbx21"),"IFNA_TNF", deg)
+p7 <- plot_lfc_pair(c("Cxcl10","Tbx21"),"IL27_TNF", deg)
+
+(p1+p3)/(p6+p7)/p2
+```
+
+#### Interacting genes for each ligand
+
+For the DEGs present induced by each ligand alone, let's see how many of them
+have interaction effects and with how many of the pairs do they have effects.
+The maximum number of pairs is 7 for any given ligand.
+
+One thing to keep in mind with this analysis is I'm using DEGs derived from
+wilcoxon test for the single stimulations and DEGs from the GLM model for the
+interaction effects. Perhaps there are some differences in pvalue distributions
+between these?
+
+```{r, fig.height=6, fig.width=15}
+# create tibble with only singles
+degSingles <- deg %>%
+  filter(grepl("_linker",group)) %>%
+  mutate(group = gsub("_linker","",group)) %>%
+  filter(pvals_adj < 0.1)
+
+# create tibble with number of significant interaction effects per gene per ligand
+groupInteractSummary <- interactions %>%
+  filter(adj_pval < 0.1) %>%
+  separate(interaction, into = c("interaction1", "interaction2"), sep = "_") %>%
+  pivot_longer(cols = c(interaction1, interaction2), 
+               names_to = "interaction_type", 
+               values_to = "group") %>%
+  select(-interaction_type) %>%
+  group_by(group, name) %>%
+  summarise(num_interactions = n())
+
+# merge dataset on interactions to single DEGs
+degSinglesInteract <- degSingles %>% 
+  left_join(groupInteractSummary, by = c("group" = "group", "names" = "name")) %>%
+  mutate(num_interactions = replace_na(num_interactions, 0))
+
+# calculate summary statistics per group per number of interactions
+degSummarySI <- degSinglesInteract %>%
+  group_by(group, num_interactions) %>%
+  summarise(interact_count = n()) %>%
+  mutate(interact_freq = interact_count/sum(interact_count)) %>%
+  mutate(num_interactions = as_factor(num_interactions))
+degSummarySI
+
+# make plots
+p1 <- ggplot(degSummarySI, aes(x=group,y=interact_count,fill=num_interactions)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_viridis_d(option = "turbo") +
+  xlab("ligand") +
+  ylab("# of DEGs\n in single ligand") +
+  guides(fill=guide_legend(title="# of pairs\nwith interactions")) +
+  ggtitle("Interacting genes per ligand\n(padj < 0.1)")
+p2 <- ggplot(degSummarySI, aes(x=group,y=interact_freq,fill=num_interactions)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_viridis_d(option = "turbo") +
+  xlab("ligand") +
+  ylab("frequency of DEGs\n in single ligand") +
+  guides(fill=guide_legend(title="# of pairs\nwith interactions")) +
+  ggtitle("Interacting genes per ligand\n(padj < 0.1)")
+
+p1+p2
+```
+
+```{r, fig.height=6, fig.width=15}
+# create tibble with only singles
+degSingles <- deg %>%
+  filter(grepl("_linker",group)) %>%
+  mutate(group = gsub("_linker","",group)) %>%
+  filter(pvals_adj < 0.01 & abs(logfoldchanges) > 0.25)
+
+# create tibble with number of significant interaction effects per gene per ligand
+groupInteractSummary <- interactions %>%
+  filter(adj_pval < 0.01 & abs(lfc) > 0.25) %>%
+  separate(interaction, into = c("interaction1", "interaction2"), sep = "_") %>%
+  pivot_longer(cols = c(interaction1, interaction2), 
+               names_to = "interaction_type", 
+               values_to = "group") %>%
+  select(-interaction_type) %>%
+  group_by(group, name) %>%
+  summarise(num_interactions = n())
+
+# merge dataset on interactions to single DEGs
+degSinglesInteract <- degSingles %>% 
+  left_join(groupInteractSummary, by = c("group" = "group", "names" = "name")) %>%
+  mutate(num_interactions = replace_na(num_interactions, 0))
+
+# calculate summary statistics per group per number of interactions
+degSummarySI <- degSinglesInteract %>%
+  group_by(group, num_interactions) %>%
+  summarise(interact_count = n()) %>%
+  mutate(interact_freq = interact_count/sum(interact_count)) %>%
+  mutate(num_interactions = as_factor(num_interactions))
+degSummarySI
+
+# make plots
+p1 <- ggplot(degSummarySI, aes(x=group,y=interact_count,fill=num_interactions)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_viridis_d(option = "turbo") +
+  xlab("ligand") +
+  ylab("# of DEGs\n in single ligand") +
+  guides(fill=guide_legend(title="# of pairs\nwith interactions")) +
+  ggtitle("Interacting genes per ligand\n(lfc > 0.25, padj < 0.01)")
+p2 <- ggplot(degSummarySI, aes(x=group,y=interact_freq,fill=num_interactions)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_viridis_d(option = "turbo") +
+  xlab("ligand") +
+  ylab("frequency of DEGs\n in single ligand") +
+  guides(fill=guide_legend(title="# of pairs\nwith interactions")) +
+  ggtitle("Interacting genes per ligand\n(lfc > 0.25, padj < 0.01)")
+
+p1+p2
+```
+
+```{r}
+
+```
+
+## Making plots
 
 ```{r, fig.height=30, fig.width=30}
 # Extract unique ligands
 unique_ligands <- unique(unlist(strsplit(interSig$interaction, "_")))
 
 # Call the function
-pairwise_plot_grid <- generate_pairwise_plot_grid(
+pairwisePlot <- generate_pairwise_plot_grid(
   unique_ligands = unique_ligands,
-  interactions = interactions,
-  coeff = coeff,
-  interSig = interSig,
+  interactions = interactionsLfc,
+  singles = singlesLfc,
   p_val_cutoff = 0.1,
   lfc_cutoff = 0.25
 )
-
-pairwise_plot_grid
+pairwisePlot
+#ggsave("plots/interactions_xy_plot_glmGamPoi.pdf")
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r, fig.height=5, fig.width=12}
+make_xy_plot("IL4_TNF", interactions = interactionsLfc, singles = singlesLfc, p_val_cutoff=10^-20) +
+  geom_text_repel(aes(label=name), size=2) +
+  facet_wrap(~lfc < 0)
+```
