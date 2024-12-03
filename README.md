@@ -25,18 +25,25 @@ The workflow of Flex is easier than with universal GEM-X because you can use fix
 While I can't deconvolute exact well identitiy (see caveats), I can at least examine the correlation between biological replicates across plates.
 ##### Files: 
 
+#### <ins>Downsampling analysis<ins>
+This dataset has an excess number of cells. I want to be sure that with fewer numbers of cells we can still detect interaction effects.
+##### Files:
+* processing/counts_processing_SIG07: create downsampled anndata (downsampled to 500 cells per ligand combination)
+* analysis/deg_analysis_SIG07.ipynb: DEG analysis with downsampled data
+* analysis/interaction_glmGamPoi_ds500.r: R script to run GamPoi GLM in parallel format on cluster with downsampled data
+
 #### <ins>Differential Transcriptome Analysis<ins>
 Examine transcriptional similarity between ligands and look at differentially expressed genes.
 ##### Files:
-* correlation_analysis.ipynb: clustering and inter-ligand comparisons using heatmaps and MDE
-* deg_analysis_SIG07.ipynb: running and testing different DEG approaches
+* analysis/correlation_analysis.ipynb: clustering and inter-ligand comparisons using heatmaps and MDE
+* analysis/deg_analysis_SIG07.ipynb: running and testing different DEG approaches
 
 #### <ins>Linear modeling to recover additive vs emergent interaction effects.<ins>
 Using gene-level and overall expression values, we can quantify the interaction effects across different ligand pairings.
 ##### Files:
-* interaction_glm_notebook.ipynb: testing different glm approaches and coding
-* interaction_glmGamPoi.r: R script to run GamPoi GLM in parallel format on cluster
-* interaction_glmGamPoi_viz.Rmd: R markdown visualization of glmGamPoi results
+* analysis/interaction_glm_notebook.ipynb: testing different glm approaches and coding
+* analysis/interaction_glmGamPoi.r: R script to run GamPoi GLM in parallel format on cluster
+* analysis/interaction_glmGamPoi_viz.Rmd: R markdown visualization of glmGamPoi results
 
 #### <ins>Factor analysis<ins>
 Perhaps could be used to identify robust downstream signaling networks that correspond to specific signaling intermediates? Can use spectra, topic modeling, etc.
