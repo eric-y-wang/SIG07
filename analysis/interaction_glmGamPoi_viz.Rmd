@@ -16,6 +16,7 @@ output:
 ```{r setup}
 library(tidyverse)
 library(ggrepel)
+library(patchwork)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -635,7 +636,7 @@ interSigMerge <- interSig %>%
   arrange(coeff_diff)
 
 interSigMerge
-write_csv(emergentInter,"analysis_outs/interactions_diff_annotated.csv")
+write_csv(interSigMerge,"analysis_outs/interactions_diff_annotated.csv")
 ```
 
 ### Identifying "true" emergent interactions
@@ -646,13 +647,19 @@ absolute value LFC in the singles.
 ```{r}
 emergentInter <- interSigMerge %>%
   filter(max_abs_lfc_single < 0.1 & abs(lfc) > 0.4) %>%
-  arrange(adj_pval)
+  arrange(desc(coeff_diff))
 emergentInter
 write_csv(emergentInter,"analysis_outs/emergent_interactions_manual_cutoff.csv")
 ```
 
-```{r}
-plot_lfc_pair(c("Ramp1"),"IL2_TNF", degWilcox)
+```{r, fig.height=10, fig.width=15}
+p1 <- plot_lfc_pair(c("Rorc"),"IL6_TNF", degWilcox)
+p2 <- plot_lfc_pair(c("Xdh"),"IL4_IL27", degWilcox)
+p3 <- plot_lfc_pair(c("Ptpn13"),"IL4_TNF", degWilcox)
+p4 <- plot_lfc_pair(c("H2-DMa"),"IL2_IFNA", degWilcox)
+p5 <- plot_lfc_pair(c("Tfap4"),"IL6_TNF", degWilcox)
+
+p1+p2+p3+p4+p5+plot_layout(ncol=3)
 ```
 
 ### Specific interesting cases
@@ -687,13 +694,49 @@ make_xy_plot("IL4_IFNA",
 #### IL4 vs IL6/IL21 interaction effects
 
 ```{r, fig.height=12, fig.width=12}
-p1 <- make_xy_plot("IL4_IL6",
-             interactions = interactionsLfc, singles = singlesLfc, p_val_cutoff=0.1) +
-  geom_text_repel(aes(label=name), size=2) +
-  facet_wrap(~lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
-p2 <- make_xy_plot("IL4_IL21",
-             interactions = interactionsLfc, singles = singlesLfc, p_val_cutoff=0.1) +
-  geom_text_repel(aes(label=name), size=2) +
-  facet_wrap(~lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
-p1/p2
+p1 <- make_xy_plot(
+  "IL4_IL6",
+  interactions = interactionsLfc,
+  singles = singlesLfc,
+  p_val_cutoff = 0.1
+) +
+  geom_text_repel(aes(label = name), size = 2) +
+  facet_wrap( ~ lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
+p2 <- make_xy_plot(
+  "IL4_IL21",
+  interactions = interactionsLfc,
+  singles = singlesLfc,
+  p_val_cutoff = 0.1
+) +
+  geom_text_repel(aes(label = name), size = 2) +
+  facet_wrap( ~ lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
+p1 / p2
+```
+
+```{r}
+interSub <- interactionsLfc %>%
+  filter(interaction %in% c("IL4_IL6", "IL4_IL21")) %>%
+  select(name, adj_pval, lfc, interaction) %>%
+  pivot_wider(
+    names_from = interaction,
+    values_from = c(adj_pval, lfc),
+    names_sep = "_"
+  )
+```
+
+```{r, fig.height=10, fig.width=10}
+ggplot(interSub, aes(x = lfc_IL4_IL6, y = lfc_IL4_IL21)) +
+  geom_point() +
+  geom_text_repel(aes(label = name), size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  xlim(-2.1,2.1) +
+  ylim(-2.1,2.1)
+```
+
+```{r, fig.height=5, fig.width=15}
+p1 <- plot_lfc_pair(c("Il4ra","Il21r","Gadd45g","Sgk1","Paqr3","Itgam"),"IL4_IL6", degWilcox)
+p2 <- plot_lfc_pair(c("Il4ra","Il21r","Gadd45g","Sgk1","Paqr3","Itgam"),"IL4_IL21", degWilcox)
+
+p1+p2
 ```
