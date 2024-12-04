@@ -6,11 +6,9 @@ output:
   github_document:
     toc: true
     html_preview: false
-    mathjax: default
   html_notebook:
     toc: true
     toc_float: true
-    mathjax: default
 ---
 
 ```{r setup}
@@ -63,7 +61,7 @@ interactionsLfc <- read_csv("analysis_outs/glmGamPoi_interaction_deg.csv")
 interSig <- interactionsLfc %>% filter(adj_pval < 0.1)
 singlesLfc <- read_csv("analysis_outs/glmGamPoi_singles_deg.csv")
 # import DEGs from scanpy
-degWilcox <- read_csv("analysis_outs/deg_wilcoxon.csv")[-1]
+degWilcox <- read_csv("analysis_outs/deg_wilcoxon.csv")
 ```
 
 ```{r}
@@ -619,37 +617,97 @@ pairwisePlot
 
 We can try to identify "strong" interaction effects by focusing on those with
 the largest difference between the interaction effect coefficient and the single
-ligand coefficients from the GLM model.
+ligand coefficients from the GLM model. I iterated through a few different
+metrics, but many of them were biased towards genes that have strong LFC in the
+single ligand conditions (because for high LFC genes, the interaction effects
+have higher LFC)
+
+The scores I settled on are included below. Essentially they prioritize
+interaction effects by examining the magnitude of the interaction LFC compared
+to purely additive LFC.
+
+Note that in this case the coefficients for AB represent the LFC attributable to
+the interaction effect specifically. Thus for a buffering interaction you might
+have LFC[A] = 1, LFC[B] = 1, LFC[AB] = -0.2. This means that if you calculated
+LFC[AB vs control expression], the LFC would not be negative, just that it would
+be smaller than expected based on additive LFCs.
+
+Diff_magnitude_2 further de-prioritizes strong dominant interactions (e.g.
+LFC[A] = -2, LFC[B] = 2, LFC[AB] = 2). For example, this interaction would have
+a very high value in diff_magnitude_1 (2/0) but a much lower value in
+diff_magnitude_2 (2/4).
+
+$$
+\text{Diff Magnitude 1} = \frac{\lvert\text{LFC[AB]}\rvert}{\lvert \text{(LFC[A]+LFC[B])} \rvert}+1
+$$
+
+$$
+\text{Diff Magnitude 2} = \frac{\lvert \text{LFC[AB]} \rvert}{\lvert \text{LFC[A]}\rvert\text{+}\lvert\text{LFC[B]}\rvert}+1
+$$
+
+These scores provide a somewhat natural interpretation of the magnitude of
+emergent effects. Note that **they do not distinguish between buffering and
+synergistic interactions**.
+
+-   Genes with log2(diff_magnitude_1) = 1: interaction effect at least as strong
+    as additive effects
+-   Genes with log2(diff_magnitude_1) \> 1: interaction effect greater as
+    additive effects
+-   Genes with log2(diff_magnitude_1) \< 1: interaction effect smaller than
+    additive effect
+-   Genes with log2(diff_magnitude_1) = 0: no interaction effect
 
 ```{r}
 # get mean coeff for single ligands per interaction per gene
-meanSingleCoeff <- singlesLfc %>%
+expectedSingleCoeff <- singlesLfc %>%
   group_by(interaction, name) %>%
-  summarise(mean_lfc_single = mean(lfc),
-            max_abs_lfc_single = max(abs(lfc)),
+  summarise(expected_lfc_single = sum(lfc),
+            expected_lfc_abs_single = sum(abs(lfc)),
             .groups = "drop")
 
+# only include interactions with singificant LFC
 interSigMerge <- interSig %>%
   select(interaction, name, adj_pval, lfc) %>%
-  left_join(meanSingleCoeff, by = c("interaction","name")) %>%
-  mutate(coeff_diff = lfc + mean_lfc_single) %>%
-  arrange(coeff_diff)
-
-interSigMerge
-write_csv(interSigMerge,"analysis_outs/interactions_diff_annotated.csv")
+  left_join(expectedSingleCoeff, by = c("interaction","name")) %>%
+  mutate(diff_magnitude_1 = (abs(lfc)/abs(expected_lfc_single))+1,
+         diff_magnitude_2 = (abs(lfc)/expected_lfc_abs_single)+1) %>%
+  arrange(desc(diff_magnitude_2))
+interSigMerge %>% filter(abs(lfc) > 0.25 & adj_pval < 0.001) %>% arrange(desc(diff_magnitude_1))
+# write_csv(interSigMerge,"analysis_outs/interactions_diff_annotated.csv")
 ```
 
-### Identifying "true" emergent interactions
-
-To identify true "emergent" interaction effects, I will filter on the maximum
-absolute value LFC in the singles.
-
-```{r}
-emergentInter <- interSigMerge %>%
-  filter(max_abs_lfc_single < 0.1 & abs(lfc) > 0.4) %>%
-  arrange(desc(coeff_diff))
-emergentInter
-write_csv(emergentInter,"analysis_outs/emergent_interactions_manual_cutoff.csv")
+```{r, fig.height=10, fig.width=12}
+p1 <- interSigMerge %>%
+  ggplot(aes(x = lfc, y=log2(diff_magnitude_1))) +
+  geom_pointdensity() +
+  scale_color_viridis_c() +
+  geom_hline(yintercept=1, linetype="dashed", color="red") +
+  geom_hline(yintercept=0, linetype="dashed", color="red") +
+  xlab("interaction GLM LFC")
+p2 <- interSigMerge %>%
+  ggplot(aes(x = lfc, y=log2(diff_magnitude_2))) +
+  geom_pointdensity() +
+  scale_color_viridis_c() +
+  geom_hline(yintercept=1, linetype="dashed", color="red") +
+  geom_hline(yintercept=0, linetype="dashed", color="red") +
+  xlab("interaction GLM LFC")
+p3 <- interSigMerge %>%
+  ggplot(aes(x = log2(diff_magnitude_1), y=-log10(adj_pval))) +
+  geom_pointdensity() +
+  scale_color_viridis_c() +
+  geom_hline(yintercept=-log10(0.001), linetype="dashed", color="red") +
+  geom_vline(xintercept=1, linetype="dashed", color="red") +
+  geom_vline(xintercept=0, linetype="dashed", color="red") +
+  ylab("-log10(padj)")
+p4 <- interSigMerge %>%
+  ggplot(aes(x = log2(diff_magnitude_2), y=-log10(adj_pval))) +
+  geom_pointdensity() +
+  scale_color_viridis_c() +
+  geom_hline(yintercept=-log10(0.001), linetype="dashed", color="red") +
+  geom_vline(xintercept=1, linetype="dashed", color="red") +
+  geom_vline(xintercept=0, linetype="dashed", color="red") +
+  ylab("-log10(padj)")
+p1+p2+p3+p4+plot_layout(ncol=2)
 ```
 
 ```{r, fig.height=10, fig.width=15}
@@ -658,13 +716,14 @@ p2 <- plot_lfc_pair(c("Xdh"),"IL4_IL27", degWilcox)
 p3 <- plot_lfc_pair(c("Ptpn13"),"IL4_TNF", degWilcox)
 p4 <- plot_lfc_pair(c("H2-DMa"),"IL2_IFNA", degWilcox)
 p5 <- plot_lfc_pair(c("Tfap4"),"IL6_TNF", degWilcox)
+p6 <- plot_lfc_pair(c("Thrb"),"IL4_TNF", degWilcox)
 
-p1+p2+p3+p4+p5+plot_layout(ncol=3)
+p1+p2+p3+p4+p5+p6+plot_layout(ncol=3)
 ```
 
-### Specific interesting cases
+## Specific interesting cases
 
-#### IL12 interaction effects
+### IL12 interaction effects
 
 ```{r, fig.height=18, fig.width=12}
 p1 <- make_xy_plot("IL12_IFNA",
@@ -682,7 +741,7 @@ p3 <- make_xy_plot("IL12_IL21",
 p1+p2+p3+plot_layout(ncol=1)
 ```
 
-#### IL4 IFNA interaction effect
+### IL4 IFNA interaction effect
 
 ```{r, fig.height=6, fig.width=12}
 make_xy_plot("IL4_IFNA",
@@ -691,7 +750,40 @@ make_xy_plot("IL4_IFNA",
   facet_wrap(~lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
 ```
 
-#### IL4 vs IL6/IL21 interaction effects
+### IL2/4 vs IL27 interaction
+
+Does IL27 synergize with IL4 to reinforce Th1 programs?
+
+```{r, fig.height=12, fig.width=12}
+p1 <- make_xy_plot("IL4_IL27",
+             interactions = interactionsLfc, singles = singlesLfc, p_val_cutoff=0.1) +
+  geom_text_repel(aes(label=name), size=2) +
+  facet_wrap(~lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
+p2 <- make_xy_plot("IL2_IL27",
+             interactions = interactionsLfc, singles = singlesLfc, p_val_cutoff=0.1) +
+  geom_text_repel(aes(label=name), size=2) +
+  facet_wrap(~lfc < 0, labeller = as_labeller(c(`TRUE` = "neg interaction LFC", `FALSE` = "pos interaction LFC")))
+p1+p2+plot_layout(ncol=1)
+```
+
+```{r, fig.height=10, fig.width=10}
+interSub <- interactionsLfc %>%
+  filter(interaction %in% c("IL2_IL27", "IL4_IL27")) %>%
+  select(name, adj_pval, lfc, interaction) %>%
+  pivot_wider(
+    names_from = interaction,
+    values_from = c(adj_pval, lfc),
+    names_sep = "_"
+  )
+
+ggplot(interSub, aes(x = lfc_IL2_IL27, y = lfc_IL4_IL27)) +
+  #geom_point() +
+  geom_text(aes(label = name), size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed")
+```
+
+### IL4 vs IL6/IL21 interaction effects
 
 ```{r, fig.height=12, fig.width=12}
 p1 <- make_xy_plot(
@@ -714,6 +806,10 @@ p1 / p2
 ```
 
 ```{r}
+
+```
+
+```{r, fig.height=10, fig.width=10}
 interSub <- interactionsLfc %>%
   filter(interaction %in% c("IL4_IL6", "IL4_IL21")) %>%
   select(name, adj_pval, lfc, interaction) %>%
@@ -722,12 +818,10 @@ interSub <- interactionsLfc %>%
     values_from = c(adj_pval, lfc),
     names_sep = "_"
   )
-```
 
-```{r, fig.height=10, fig.width=10}
 ggplot(interSub, aes(x = lfc_IL4_IL6, y = lfc_IL4_IL21)) +
-  geom_point() +
-  geom_text_repel(aes(label = name), size = 2) +
+  #geom_point() +
+  geom_text(aes(label = name), size = 2) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_vline(xintercept = 0, linetype = "dashed") +
   xlim(-2.1,2.1) +
