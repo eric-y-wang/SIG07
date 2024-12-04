@@ -21,4 +21,4 @@ mamba activate R-deseq2
 # set directory (with fail safe in case it fails)
 cd /lila/data/rudensky/EYW/git_projects/SIG07/analysis|| { echo "Failure"; exit 1; }
 
-Rscript interaction_glmGamPoi.r
+Rscript interaction_glmGamPoi_HVG.r

@@ -13,7 +13,7 @@ counts <- readMM("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_cou
 genes <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs_genes.csv")
 cells <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs_cells.csv")
 obs <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs.csv")
-degSig <- read_csv("/data/rudensky/EYW/git_projects/SIG07/analysis_outs/deg_sig_wilcoxon.csv")[, -1]
+degSig <- read_csv("/data/rudensky/EYW/git_projects/SIG07/analysis_outs/deg_sig_wilcoxon.csv")
 cat("Data loaded successfully.\n")
 
 # Add gene and cell names to counts
@@ -134,24 +134,46 @@ run_glm_test <- function(ligands, counts, obs, deg_data) {
         return(NULL)
     }
 
-    # Step 3: Extract DE test results
+    # Step 3.1: Extract DE test results interaction
     # Use the `test_de` function to perform differential expression testing for the interaction term.
-    res <- tryCatch(
+    res1 <- tryCatch(
         test_de(fit, contrast = `ligand1:ligand2`) %>%
             as_tibble() %>%                           
             mutate(interaction = paste0(ligands[1], "_", ligands[2])),
         error = function(e) {
             # Handle errors in DE testing: log the error and return NULL
-            message("Error in test_de for ligands: ", paste(ligands, collapse = ", "), ": ", e$message)
+            message("Error in test_de for ligand interaction: ", paste(ligands, collapse = ", "), ": ", e$message)
             return(NULL)
         }
     )
 
-    # Check if the DE testing was successful
-    if (is.null(res)) {
-        # If DE testing failed, return NULL
-        return(NULL)
-    }
+    # Step 3.2: Extract DE test results ligand 1
+    # Use the `test_de` function to perform differential expression testing for the interaction term.
+    res2 <- tryCatch(
+        test_de(fit, contrast = `ligand1`) %>%
+            as_tibble() %>%                           
+            mutate(interaction = paste0(ligands[1],"_",ligands[2]),
+		   single_ligand = paste0(ligands[1])),
+        error = function(e) {
+            # Handle errors in DE testing: log the error and return NULL
+            message("Error in test_de for ligand 1: ", paste(ligands, collapse = ", "), ": ", e$message)
+            return(NULL)
+        }
+    )
+
+    # Step 3.3: Extract DE test results ligand 1
+    # Use the `test_de` function to perform differential expression testing for the interaction term.
+    res3 <- tryCatch(
+        test_de(fit, contrast = `ligand2`) %>%
+            as_tibble() %>%                           
+            mutate(interaction = paste0(ligands[1],"_",ligands[2]),
+		   single_ligand = paste0(ligands[2])),
+        error = function(e) {
+            # Handle errors in DE testing: log the error and return NULL
+            message("Error in test_de for ligands 2: ", paste(ligands, collapse = ", "), ": ", e$message)
+            return(NULL)
+        }
+    )
 
     # Step 4: Extract model coefficients
     # Extract the coefficients from the fitted model and convert them to a tibble.
@@ -170,7 +192,8 @@ run_glm_test <- function(ligands, counts, obs, deg_data) {
     # `de_results` contains the differential expression results
     # `coefficients` contains the wide-format coefficients
     combined_results <- list(
-        de_results = res,
+        de_results = res1,
+	de_results_singles = bind_rows(res2,res3),
         coefficients = coef_tibble
     )
 
@@ -199,8 +222,10 @@ results <- future_map(
 
 # Combine and save results
 cat("Combining and saving results...\n")
-all_de_results <- bind_rows(lapply(results, function(x) x$de_results))
+interaction_de_results <- bind_rows(lapply(results, function(x) x$de_results))
+single_de_results <- bind_rows(lapply(results, function(x) x$de_results_singles))
 all_coefficients <- bind_rows(lapply(results, function(x) x$coefficients))
-write_csv(all_de_results, "/data/rudensky/EYW/git_projects/SIG07/analysis_outs/glmGamPoi_interaction_deg.csv")
+write_csv(interaction_de_results, "/data/rudensky/EYW/git_projects/SIG07/analysis_outs/glmGamPoi_interaction_deg.csv")
+write_csv(single_de_results, "/data/rudensky/EYW/git_projects/SIG07/analysis_outs/glmGamPoi_singles_deg.csv")
 write_csv(all_coefficients, "/data/rudensky/EYW/git_projects/SIG07/analysis_outs/glmGamPoi_coefficients.csv")
 cat("Results saved successfully.\n")

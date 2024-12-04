@@ -13,7 +13,7 @@ counts <- readMM("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_cou
 genes <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs_genes.csv")
 cells <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs_cells.csv")
 obs <- read_csv("/data/rudensky/EYW/SIG07/scanpy_outs/SIG07_doublets_CR_RNA_obs.csv")
-degSig <- read_csv("/data/rudensky/EYW/git_projects/SIG07/analysis_outs/deg_sig_wilcoxon.csv")[, -1]
+degSig <- read_csv("/data/rudensky/EYW/git_projects/SIG07/analysis_outs/deg_sig_wilcoxon.csv")
 cat("Data loaded successfully.\n")
 
 # Add gene and cell names to counts
