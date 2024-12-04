@@ -70,7 +70,7 @@ gene-level Gamma Poisson GLM modeling. As a reminder, the GLM is
 expressed as follows:
 
 $$
-\log(\mu_i) = \beta_0 + \beta_1 (\text{ligand1}_i) + \beta_2 (\text{ligand2}_i) + \beta_3 (\text{ligand1}_i \cdot \text{ligand2}_i) + \beta_4 (\text{group}_i) + \beta_5 (\text{percent.mito}_i) + \beta_6 (\text{s.score}_i) + \beta_7 (\text{g2m.score}_i) + \log(\text{total_counts}_i)
+\log(\mu_i) = \beta_0 + \beta_1 (\text{ligand1}_i) + \beta_2 (\text{ligand2}_i) + \beta_3 (\text{ligand1}_i \cdot \text{ligand2}_i) + \beta_4 (\text{group}_i) + \beta_5 (\text{percent.mito}_i) + \beta_6 (\text{s.score}_i) + \beta_7 (\text{g2m.score}_i) + \log(\text{total.counts}_i)
 $$
 
 Where:
@@ -89,7 +89,7 @@ Where:
 - $\text{s.score}_i$: The S-phase cell cycle score for observation $i$.
 - $\text{g2m.score}_i$: The G2/M-phase cell cycle score for observation
   $i$.
-- $\text{total_counts}_i$: The scaling factor for sequencing depth.
+- $\text{total.counts}_i$: The scaling factor for sequencing depth.
 
 ## Import Data
 
