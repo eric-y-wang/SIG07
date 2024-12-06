@@ -5,9 +5,9 @@
 # The name of the queue you wan't to submit the job to
 #BSUB -q cpuqueue
 # The number of processors you want
-#BSUB -n 32
+#BSUB -n 24
 # Sets memory requirements for the job (per processor)
-#BSUB -R rusage[mem=10]
+#BSUB -R rusage[mem=14]
 # How long the job will take (you job will be killed if it runs over the time limit)
 #BSUB -W 48:00
 # Output and error log files (optional but recommended)
@@ -21,4 +21,4 @@ mamba activate R-deseq2
 # set directory (with fail safe in case it fails)
 cd /lila/data/rudensky/EYW/git_projects/SIG07/analysis|| { echo "Failure"; exit 1; }
 
-Rscript interaction_glmGamPoi_HVG.r
+Rscript interaction_glmGamPoi_allGenes.r
